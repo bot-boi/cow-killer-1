@@ -1,0 +1,388 @@
+// CTS2(11777213, 8, 0.24, 0.08) cow leather color
+// CTS2( 4741228, 14, 0.04, 0.70) brown cow color
+// CTS2( 3554893, 13, 0.09, 0.54) black solid cow color
+// CTS2( 2176573,  8, 0.11, 1.48) black spotted cow color
+// CTS2(  469051,  5, 0.03, 0.44) stair pillar color
+// CTS2(  807030,  4, 0.05, 0.86) pasture gate color
+// zoom is set at 50%, angle is highest, brightness is 100%
+
+program cow;
+
+{$DEFINE SMART}
+{$include_once credentials.simba} // const NAME, PW, WORLD
+{$I simba-startup/login.simba}
+{$I SRL/OSR.simba}
+{$I RSWalker/Walker.simba}
+
+const
+  clientPath = 'C:\Users\Administrator\jagexcache\jagexlauncher\bin\JagexLauncher.exe';
+  rawPath    = [[796, 538], [841, 502], [897, 486], [905, 437], [898, 384], [901, 330], [950, 324], [980, 311]];
+  rawPathLumby = [[70, 117], [84, 66]]; // stair & bank location in upstairs lumby
+var
+  Walker:                   TRSWalker;
+  clientProcess:            TProcess;
+  BR_COW:                   TCTS2Color;  // these should be in an enum or equivalent
+  BL_COW:                   TCTS2Color;
+  COW_LEATHER:              TCTS2Color;
+  STAIR_PILLAR:             TCTS2Color;
+  PASTURE_GATE:             TCTS2Color;
+  BL_COW_SPOTTED:           TCTS2Color;
+  PPasture, PStairs, PStairsUpper, PBank, PGate: TPoint;
+  BankPath, PasturePath, StairPath, UpperStairPath: TPointArray;
+  P: array of Int64;
+
+procedure onStart;
+
+var
+  P: array of Int64;
+  I: Int64;
+
+begin
+  writeln('starting');
+  declarePlayer(NAME, PW, WORLD);
+  Players.SetCurrent(0);
+  scriptStarter(clientProcess, clientPath);
+  Options.SetZoom(50);
+  Options.SetBrightness(100);
+  Mainscreen.SetAngle(True);
+
+  Walker.Init('lumby-slice.png');
+  Walker.SkipClose := 0;
+  AddOnTerminate(@Walker.Free);
+
+  BR_COW           := CTS2( 4741228, 14, 0.04, 0.70);
+  BL_COW           := CTS2( 3554893, 13, 0.09, 0.54);
+  COW_LEATHER      := CTS2(11777213,  8, 0.24, 0.08);
+  STAIR_PILLAR     := CTS2(  469051,  5, 0.03, 0.44);
+  PASTURE_GATE     := CTS2(  807030,  4, 0.05, 0.86);
+  BL_COW_SPOTTED   := CTS2( 2176573,  8, 0.11, 1.48);
+
+  PPasture         := Point(1000, 251);  // cow pasture NE of lumbridge castle
+  PStairs          := Point( 796, 538);  // lumbridge stairs
+  PStairsUpper     := Point(  70, 117);  // lumbridge bank lumby-bank.png
+  PBank            := Point(  84,  66);  // lumbridge bank stairs lumby-bank.png
+  PGate            := Point( 980, 311);  // pasture gate location
+  StairPath        := [];                // path to stairs from pasture
+  PasturePath      := [];                // path from stairs to pasture
+  BankPath         := [PBank];           // path from upper stair to bank
+  UpperStairPath   := [PStairsUpper];    // path from bank to upper stair
+
+  for P in rawPath do
+    PasturePath.Append(Point(P[0], P[1]));
+
+  I := Length(PasturePath);
+  while I > 0 do begin
+    I -= 1;
+    StairPath.Append(PasturePath[I]);
+  end;
+end;
+
+procedure onExit;
+begin
+  writeln('exiting');
+  scriptEnder(clientProcess, 0);
+end;
+
+function WaitPlayerAnimating(): boolean; begin
+  repeat
+    wait(50);
+  until not SRL.IsAnimating(Mainscreen.GetPlayerBox, 150, 500);
+end
+
+function WaitScreenMoving(): boolean; begin // a 640x440 screen has ~281000 pixels
+  repeat
+    wait(50);
+  until not SRL.IsAnimating(Mainscreen.GetBounds, 20000, 500, 5);
+end
+
+function findLeather(): boolean;
+var
+  TPA, Leather: TPointArray;
+  ATPA: T2DPointArray;
+
+  procedure waitLoop();
+  var
+    InvCount: Integer;
+    T: TTimeMarker;
+  begin
+    InvCount := Inventory.Count();
+    T.Start;
+    repeat
+      WaitPlayerAnimating();
+    until ((Inventory.Count() > InvCount) or (T.GetTime > 15000));
+  end;
+
+begin
+  Result := False;
+  WaitPlayerAnimating();
+  if (SRL.FindColors(TPA, COW_LEATHER, Mainscreen.GetBounds) > 0) then
+  begin
+    ATPA := TPA.Cluster(3);                 // sort pixels with 2 of each other into groups
+    ATPA.FilterSize(100, 300);              // filter out < 200 & > 600 pixel groups
+    ATPA.SortByIndex(Mainscreen.GetMiddle); // sort groups by closest to middle
+    {$IFDEF SMART}
+      Smart.Image.DebugATPA(ATPA);
+    {$ENDIF}
+    for Leather in ATPA do
+    begin
+      Mouse.Move(Leather[Random(Length(Leather))]);
+      if Mainscreen.IsUpText('Cowhide') then
+      begin
+        Result := True;
+        if Mouse.Click(ctRed) then
+        begin
+          waitLoop();
+          Break;
+        end;
+      end;
+    end;
+  end;
+  writeln('found leather: ' + BoolToStr(Result));
+end;
+
+function openGate(): boolean;
+var
+  TPA, Gate: TPointArray;
+  ATPA: T2DPointArray;
+
+begin
+  Result := False;
+  if (SRL.FindColors(TPA, PASTURE_GATE, Mainscreen.GetBounds) > 0) then
+  begin
+    ATPA := TPA.Cluster(4);
+    ATPA.FilterSize(30, 2000);
+    ATPA.SortByIndex(Mainscreen.GetMiddle);
+    {$IFDEF SMART}
+      Smart.Image.DebugATPA(ATPA);
+    {$ENDIF}
+    for Gate in ATPA do
+    begin
+      Mouse.Move(Gate[Random(Length(Gate))]);
+      if Mainscreen.IsUpText('Gate') then begin
+        if ChooseOption.Open(1) then begin
+          ChooseOption.Select('Open');
+          writeln('i opened the gate :)');
+          Result := True;
+          Break;
+        end else
+          writeln('the gate was already open :D');
+      end;
+    end;
+  end;
+  writeln('opened gate: ' + BoolToStr(Result));
+end;
+
+function findCow(): boolean;
+
+  procedure waitLoop(); // waits for combat to be over
+  var
+    HPBars: THPBarArray;
+    TPA: TPointArray;
+  begin
+    writeln('beginning combat waitloop');
+    wait(2500, 4000); // wait a bit just to make sure combat has started and health bar is visible
+    while Length(Mainscreen.FindHPBars(Mainscreen.GetPlayerBox)) > 0 do begin
+      writeln('in combat!');
+      wait(250);
+    end;
+    writeln('combat waitloop ended!');
+  end;
+
+var
+  _TPA, TPA, Cow: TPointArray;
+  ATPA: T2DPointArray;
+
+begin
+  Result := False;
+  SRL.FindColors(_TPA, BR_COW, Mainscreen.GetBounds);
+  TPA := TPA.Combine(_TPA);
+  SRL.FindColors(_TPA, BL_COW, Mainscreen.GetBounds);
+  TPA := TPA.Combine(_TPA);
+  SRL.FindColors(_TPA, BL_COW_SPOTTED, Mainscreen.GetBounds);
+  TPA := TPA.Combine(_TPA);
+
+  ATPA := TPA.Cluster(4);
+  ATPA.FilterSize(110, 1000);
+  ATPA.SortByMiddle(Mainscreen.GetMiddle);
+
+  {$IFDEF SMART}
+    Smart.Image.DebugATPA(ATPA);
+  {$ENDIF}
+
+  for Cow in ATPA do
+  begin
+    Mouse.Move(Cow[Random(Length(Cow))]);
+    if Mainscreen.IsUpText('Cow') then
+    begin
+      if Mouse.Click(ctRed) then
+      begin
+        Result := True;
+        waitLoop();
+        Break;
+      end else
+        Result := False;
+        Break;
+    end;
+  end;
+end;
+
+function walkStairs(): boolean;
+
+  function findStair(): boolean;
+  var
+    TPA, _Stair: TPointArray;
+    ATPA: T2DPointArray;
+    Options: TOptionArray;
+    Option: TOption;
+  begin
+    WaitPlayerAnimating();
+    Result := False;
+    if SRL.FindColors(TPA, STAIR_PILLAR, Mainscreen.GetBounds()) > 0 then
+    begin
+      ATPA := TPA.Cluster(1);
+      ATPA.FilterSize(10, 150);
+      ATPA.SortByMiddle(Mainscreen.GetMiddle);
+
+      {$IFDEF SMART}
+        Smart.Image.DebugATPA(ATPA);
+      {$ENDIF}
+
+      for _Stair in ATPA do
+      begin
+        Mouse.Move(_Stair[Random(Length(_Stair))]);
+        if Mainscreen.IsUpText('Staircase', 1000) then begin
+          writeln('staircase found!');
+          Result := True;
+          Break;
+        end;
+      end;
+    end;
+  end;
+
+  function climbStair(): boolean; // assumes mouse is hovering over staircase
+  var
+    Options: TOptionArray;
+    Option: TOption;
+    Up: boolean;                  // going up or down?
+
+  begin
+    Result := False;
+    repeat wait(100); until findStair();
+    if ChooseOption.Open(3) then begin
+      Options := ChooseOption.GetOptions();
+      for Option in Options do begin
+        if Option.Str = 'Climb-up Staircase' then begin
+          Up := True;
+          ChooseOption.Select('Climb-up Staircase');
+          WaitScreenMoving();
+          Break;
+        end else if Option.Str = 'Climb-down Staircase' then begin
+          Up := False;
+          ChooseOption.Select('Climb-down Staircase');
+          WaitScreenMoving();
+          Break;
+        end;
+      end;
+    end;
+    repeat wait(100); until findStair();
+    if ChooseOption.Open(3) then begin
+      if Up then begin
+        ChooseOption.Select('Climb-up Staircase');
+      end else
+        ChooseOption.Select('Climb-down Staircase');
+      WaitScreenMoving();
+      Result := True;
+    end;
+    {$IFDEF SMART}
+      Smart.Image.drawClear(0);
+    {$ENDIF}
+  end;
+
+begin
+  Result := climbStair();
+end;
+
+procedure walkTo(path: TPointArray);
+begin
+  writeln('walking path...');
+  writeln(path);
+  Walker.WalkPath(Path);
+end;
+
+// checks if 2 points are in range of each other
+function inRange2(this, other: TPoint; range: integer): boolean;
+begin
+  Result := this.DistanceTo(other) <= range;
+end;
+
+procedure bankRun(); // run to bank, deposit items, run back to pasture
+begin
+  writeln('starting bank run');
+  while not inRange2(Walker.GetMyPos(), PGate, 20) do begin
+    wait(333, 777);
+    walkTo([PGate]);
+  end;
+  repeat until openGate();
+
+  while not inRange2(Walker.GetMyPos(), PStairs, 30) do begin // loop in case pathing fails
+    wait(333, 777);
+    walkTo(StairPath);
+  end;
+
+  Walker.Free();
+  Walker.Init('lumby-bank.png', 3);
+  Walker.SkipClose = 0;
+  repeat until walkStairs();
+
+  while not inRange2(Walker.GetMyPos(), PBank, 10) do begin
+    wait(333, 777);
+    walkTo([PBank]);
+  end;
+
+  Bankscreen.Open(blLumbridge);
+  Bankscreen.DepositAll();
+  Bankscreen.Close();
+
+  while not inRange2(Walker.GetMyPos(), PStairsUpper, 20) do begin
+    wait(333, 777);
+    walkTo([PStairsUpper]);
+  end;
+
+  Walker.Free();
+  Walker.Init('lumby-slice.png');
+  Walker.SkipClose = 0;
+  repeat until walkStairs();
+
+  walkTo(PasturePath);  // walk from stairs to pasture gate
+  while not inRange2(Walker.GetMyPos(), PGate, 10) do begin
+    wait(333, 777);
+    walkTo([PGate]);
+  end;
+  repeat until openGate(); // these retry loops need timeouts
+  walkTo([PPasture]);
+end;
+
+procedure mainLoop();
+begin
+  writeln('entering main loop!');
+  repeat
+    writeln('onLoop');
+    wait(50);                   // lowers CPU usage :)
+    {$IFDEF SMART}
+      Smart.Image.Clear;
+      Smart.Image.drawClear(0); // clears debug stuff
+    {$ENDIF}
+    if not (Inventory.Count() = 28) then begin
+      if not findLeather() then
+        if not findCow() then
+          walkTo([PPasture]);
+    end else
+        bankRun();
+  until(false);
+end;
+
+begin
+  onStart;
+  mainLoop();
+  onExit;
+end.
