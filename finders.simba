@@ -1,0 +1,99 @@
+// functions that primarily find objects on the screen
+
+{$include_once context.simba}
+{$include_once utils.simba}
+
+function findLeather(): boolean; // finder
+var
+  TPA, Leather: TPointArray;
+  ATPA: T2DPointArray;
+
+  procedure waitLoop();
+  var
+    InvCount: Integer;
+    T: TTimeMarker;
+  begin
+    InvCount := Inventory.Count();
+    T.Start;
+    repeat
+      WaitPlayerAnimating();
+    until ((Inventory.Count() > InvCount) or (T.GetTime > 5000));
+  end;
+
+begin
+  Result := False;
+  WaitPlayerAnimating();
+  if (SRL.FindColors(TPA, COW_LEATHER, Mainscreen.GetBounds) > 0) then
+  begin
+    ATPA := TPA.Cluster(3);                 // sort pixels with 2 of each other into groups
+    ATPA.FilterSize(100, 300);              // filter out < 200 & > 600 pixel groups
+    ATPA.SortByIndex(Mainscreen.GetMiddle); // sort groups by closest to middle
+    {$IFDEF SMART}
+      Smart.Image.DebugATPA(ATPA);
+    {$ENDIF}
+    for Leather in ATPA do
+    begin
+      Mouse.Move(Leather[Random(Length(Leather))]);
+      if Mainscreen.IsUpText('Cowhide') then
+      begin
+        Result := True;
+        if Mouse.Click(ctRed) then
+        begin
+          waitLoop();
+          Break;
+        end;
+      end;
+    end;
+  end;
+  writeln('found leather: ' + BoolToStr(Result));
+end;
+
+
+function findCow(): boolean;
+
+  procedure waitLoop(); // waits for combat to be over
+  begin
+    writeln('findCow.waitLoop-: Starting wait loop for combat.');
+    wait(2500, 4000); // wait a bit just to make sure combat has started and health bar is visible
+    while Length(Mainscreen.FindHPBars(Mainscreen.GetPlayerBox)) > 0 do begin
+      wait(100);
+    end;
+    writeln('findCow.waitLoop-: Finished combat.');
+  end;
+
+var
+  _TPA, TPA, Cow: TPointArray;
+  ATPA: T2DPointArray;
+
+begin
+  Result := False;
+  SRL.FindColors(_TPA, BR_COW, Mainscreen.GetBounds);
+  TPA := TPA.Combine(_TPA);
+  SRL.FindColors(_TPA, BL_COW, Mainscreen.GetBounds);
+  TPA := TPA.Combine(_TPA);
+  SRL.FindColors(_TPA, BL_COW_SPOTTED, Mainscreen.GetBounds);
+  TPA := TPA.Combine(_TPA);
+
+  ATPA := TPA.Cluster(4);
+  ATPA.FilterSize(110, 1200);
+  ATPA.SortByMiddle(Mainscreen.GetMiddle);
+
+  {$IFDEF SMART}
+    Smart.Image.DebugATPA(ATPA);
+  {$ENDIF}
+
+  for Cow in ATPA do
+  begin
+    Mouse.Move(Cow[Random(Length(Cow))]);
+    if Mainscreen.IsUpText('Cow') and not IsCombat(Cow) then
+    begin
+      if Mouse.Click(ctRed) then begin
+        Result := True;
+        waitLoop();
+        Break;
+      end else
+        Result := False;
+        Break;
+    end;
+  end;
+end;

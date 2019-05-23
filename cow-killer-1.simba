@@ -9,28 +9,11 @@
 
 program cow;
 
-{$DEFINE SMART}
-{$include_once credentials.simba} // const NAME, PW, WORLD
-{$I simba-startup/login.simba}
-{$I SRL/OSR.simba}
-{$I RSWalker/Walker.simba}
-
-const
-  clientPath = 'C:\Users\Administrator\jagexcache\jagexlauncher\bin\JagexLauncher.exe';
-  rawPath    = [[796, 538], [841, 502], [897, 486], [905, 437], [898, 384], [901, 330], [950, 324], [980, 311]];
-  rawPathLumby = [[70, 117], [84, 66]]; // stair & bank location in upstairs lumby
-var
-  Walker:                   TRSWalker;
-  clientProcess:            TProcess;
-  BR_COW:                   TCTS2Color;  // these should be in an enum or equivalent
-  BL_COW:                   TCTS2Color;
-  COW_LEATHER:              TCTS2Color;
-  STAIR_PILLAR:             TCTS2Color;
-  PASTURE_GATE:             TCTS2Color;
-  BL_COW_SPOTTED:           TCTS2Color;
-  PPasture, PStairs, PStairsUpper, PBank, PGate: TPoint;
-  BankPath, PasturePath, StairPath, UpperStairPath: TPointArray;
-  P: array of Int64;
+//{$DEFINE SMART}
+{$include_once context.simba}
+{$include_once utils.simba}
+{$include_once finders.simba}
+{$include_once credentials.simba}
 
 procedure onStart;
 
@@ -40,16 +23,10 @@ var
 
 begin
   writeln('starting');
-  declarePlayer(NAME, PW, WORLD);
-  Players.SetCurrent(0);
-  scriptStarter(clientProcess, clientPath);
-  Options.SetZoom(50);
-  Options.SetBrightness(100);
-  Mainscreen.SetAngle(True);
 
-  Walker.Init('lumby-slice.png');
-  Walker.SkipClose := 0;
-  AddOnTerminate(@Walker.Free);
+  InitContext(); // loads srl & walker
+
+  LoadMapContext(LUMBY_SLICE);
 
   BR_COW           := CTS2( 4741228, 14, 0.04, 0.70);
   BL_COW           := CTS2( 3554893, 13, 0.09, 0.54);
@@ -81,64 +58,14 @@ end;
 procedure onExit;
 begin
   writeln('exiting');
-  scriptEnder(clientProcess, 0);
+  FreeContext();
 end;
 
-function WaitPlayerAnimating(): boolean; begin
-  repeat
-    wait(50);
-  until not SRL.IsAnimating(Mainscreen.GetPlayerBox, 150, 500);
-end
-
-function WaitScreenMoving(): boolean; begin // a 640x440 screen has ~281000 pixels
-  repeat
-    wait(50);
-  until not SRL.IsAnimating(Mainscreen.GetBounds, 20000, 500, 5);
-end
-
-function findLeather(): boolean;
-var
-  TPA, Leather: TPointArray;
-  ATPA: T2DPointArray;
-
-  procedure waitLoop();
-  var
-    InvCount: Integer;
-    T: TTimeMarker;
-  begin
-    InvCount := Inventory.Count();
-    T.Start;
-    repeat
-      WaitPlayerAnimating();
-    until ((Inventory.Count() > InvCount) or (T.GetTime > 15000));
-  end;
-
+procedure walkTo(path: TPointArray);
 begin
-  Result := False;
-  WaitPlayerAnimating();
-  if (SRL.FindColors(TPA, COW_LEATHER, Mainscreen.GetBounds) > 0) then
-  begin
-    ATPA := TPA.Cluster(3);                 // sort pixels with 2 of each other into groups
-    ATPA.FilterSize(100, 300);              // filter out < 200 & > 600 pixel groups
-    ATPA.SortByIndex(Mainscreen.GetMiddle); // sort groups by closest to middle
-    {$IFDEF SMART}
-      Smart.Image.DebugATPA(ATPA);
-    {$ENDIF}
-    for Leather in ATPA do
-    begin
-      Mouse.Move(Leather[Random(Length(Leather))]);
-      if Mainscreen.IsUpText('Cowhide') then
-      begin
-        Result := True;
-        if Mouse.Click(ctRed) then
-        begin
-          waitLoop();
-          Break;
-        end;
-      end;
-    end;
-  end;
-  writeln('found leather: ' + BoolToStr(Result));
+  writeln('walking path...');
+  writeln(path);
+  Walker.WalkPath(Path);
 end;
 
 function openGate(): boolean;
@@ -163,6 +90,7 @@ begin
         if ChooseOption.Open(1) then begin
           ChooseOption.Select('Open');
           writeln('i opened the gate :)');
+          wait(800, 2000);
           Result := True;
           Break;
         end else
@@ -171,60 +99,6 @@ begin
     end;
   end;
   writeln('opened gate: ' + BoolToStr(Result));
-end;
-
-function findCow(): boolean;
-
-  procedure waitLoop(); // waits for combat to be over
-  var
-    HPBars: THPBarArray;
-    TPA: TPointArray;
-  begin
-    writeln('beginning combat waitloop');
-    wait(2500, 4000); // wait a bit just to make sure combat has started and health bar is visible
-    while Length(Mainscreen.FindHPBars(Mainscreen.GetPlayerBox)) > 0 do begin
-      writeln('in combat!');
-      wait(250);
-    end;
-    writeln('combat waitloop ended!');
-  end;
-
-var
-  _TPA, TPA, Cow: TPointArray;
-  ATPA: T2DPointArray;
-
-begin
-  Result := False;
-  SRL.FindColors(_TPA, BR_COW, Mainscreen.GetBounds);
-  TPA := TPA.Combine(_TPA);
-  SRL.FindColors(_TPA, BL_COW, Mainscreen.GetBounds);
-  TPA := TPA.Combine(_TPA);
-  SRL.FindColors(_TPA, BL_COW_SPOTTED, Mainscreen.GetBounds);
-  TPA := TPA.Combine(_TPA);
-
-  ATPA := TPA.Cluster(4);
-  ATPA.FilterSize(110, 1000);
-  ATPA.SortByMiddle(Mainscreen.GetMiddle);
-
-  {$IFDEF SMART}
-    Smart.Image.DebugATPA(ATPA);
-  {$ENDIF}
-
-  for Cow in ATPA do
-  begin
-    Mouse.Move(Cow[Random(Length(Cow))]);
-    if Mainscreen.IsUpText('Cow') then
-    begin
-      if Mouse.Click(ctRed) then
-      begin
-        Result := True;
-        waitLoop();
-        Break;
-      end else
-        Result := False;
-        Break;
-    end;
-  end;
 end;
 
 function walkStairs(): boolean;
@@ -303,19 +177,6 @@ begin
   Result := climbStair();
 end;
 
-procedure walkTo(path: TPointArray);
-begin
-  writeln('walking path...');
-  writeln(path);
-  Walker.WalkPath(Path);
-end;
-
-// checks if 2 points are in range of each other
-function inRange2(this, other: TPoint; range: integer): boolean;
-begin
-  Result := this.DistanceTo(other) <= range;
-end;
-
 procedure bankRun(); // run to bank, deposit items, run back to pasture
 begin
   writeln('starting bank run');
@@ -323,24 +184,27 @@ begin
     wait(333, 777);
     walkTo([PGate]);
   end;
-  repeat until openGate();
+
+  repeat Minimap.RandomCompass(0, 360) until openGate();
 
   while not inRange2(Walker.GetMyPos(), PStairs, 30) do begin // loop in case pathing fails
     wait(333, 777);
     walkTo(StairPath);
   end;
 
-  Walker.Free();
-  Walker.Init('lumby-bank.png', 3);
+  LoadMapContext(LUMBY_BANK, 3);
   Walker.SkipClose = 0;
-  repeat until walkStairs();
+
+  repeat Minimap.RandomCompass(0, 360); until walkStairs();
 
   while not inRange2(Walker.GetMyPos(), PBank, 10) do begin
     wait(333, 777);
     walkTo([PBank]);
   end;
 
-  Bankscreen.Open(blLumbridge);
+  if Random(1) = 1 then AntibanContext();
+
+  repeat Minimap.RandomCompass(0, 360); until Bankscreen.Open(blLumbridge);
   Bankscreen.DepositAll();
   Bankscreen.Close();
 
@@ -349,10 +213,10 @@ begin
     walkTo([PStairsUpper]);
   end;
 
-  Walker.Free();
-  Walker.Init('lumby-slice.png');
+  LoadMapContext(LUMBY_SLICE);
   Walker.SkipClose = 0;
-  repeat until walkStairs();
+
+  repeat Minimap.RandomCompass(0, 360); until walkStairs();
 
   walkTo(PasturePath);  // walk from stairs to pasture gate
   while not inRange2(Walker.GetMyPos(), PGate, 10) do begin
@@ -364,19 +228,37 @@ begin
 end;
 
 procedure mainLoop();
+var
+  I: Integer;
 begin
   writeln('entering main loop!');
   repeat
+    I := 3; // cows to kill before looting
     writeln('onLoop');
     wait(50);                   // lowers CPU usage :)
     {$IFDEF SMART}
       Smart.Image.Clear;
       Smart.Image.drawClear(0); // clears debug stuff
     {$ENDIF}
+
+    if Random(25) = 1 then AntibanContext();
+
+    if Minimap.GetHPPercent < 40 then
+      //Logout.ClickLogout();
+      wait(20000,54000); // wait for ~6-15 mins to heal up
+
+      if not SRL.IsLoggedIn() then begin
+        Players.SetCurrent(0);
+        Players.LoginCurrent();
+      end;
+
     if not (Inventory.Count() = 28) then begin
       if not findLeather() then
-        if not findCow() then
-          walkTo([PPasture]);
+        if not findCow() then begin
+          walkTo([RandomizePoint(PPasture, 10)]);
+        end else begin
+          repeat I -= 1 until not findCow() or (I <= 0);;
+        end;
     end else
         bankRun();
   until(false);

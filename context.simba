@@ -1,0 +1,94 @@
+// context.simba
+// This is the global context of the script.  These variables will be made available to other files via the {$include_once} directive.
+// context.simba contains or may eventually contain an instance of SRL, RSWalker, the OSRS client (as a TClientWrapper (TODO)), and a logger.
+// Basically, this is the global context of the script, so things that need to be globally available will end up here.
+
+
+
+{$I SRL/OSR.simba}
+
+{$I RSWalker/Walker.simba}
+{$include_once credentials.simba}
+{$include_once utils.simba}
+
+const
+  LUMBY_BANK   = 'C:\Users\Administrator\Desktop\Simba\Scripts\cow-killer-1\maps\lumby-bank.png';
+  LUMBY_SLICE  = 'C:\Users\Administrator\Desktop\Simba\Scripts\cow-killer-1\maps\lumby-slice.png';
+  clientPath   = 'C:\Users\Administrator\jagexcache\jagexlauncher\bin\JagexLauncher.exe';
+  rawPath      = [[796, 538], [841, 502], [897, 486], [905, 437], [898, 384], [901, 330], [950, 324], [980, 311]];
+  rawPathLumby = [[70, 117], [84, 66]]; // stair & bank location in upstairs lumby
+
+var
+  InitFlag: Boolean;
+  Walker:   TRSWalker;
+  Antiban:  TAntiban;
+  BR_COW:                   TCTS2Color;  // these should be in an enum or equivalent
+  BL_COW:                   TCTS2Color;
+  COW_LEATHER:              TCTS2Color;
+  STAIR_PILLAR:             TCTS2Color;
+  PASTURE_GATE:             TCTS2Color;
+  BL_COW_SPOTTED:           TCTS2Color;
+  PPasture, PStairs, PStairsUpper, PBank, PGate: TPoint;
+  BankPath, PasturePath, StairPath, UpperStairPath: TPointArray;
+
+// FreeContext - Frees Context.
+procedure FreeContext; begin
+  writeln('FreeContext-: Freeing Context.');
+  if Assigned(Walker) then
+    Walker.Free;
+end;
+
+// InitContext - Initializes Context.
+procedure InitContext; begin
+  writeln('InitContext-: Initializing Context.');
+  SRL.Setup([]);
+  declarePlayer(NAME, PW, WORLD);
+  Players.SetCurrent(0);
+  if not SRL.isLoggedIn then
+    Players.LoginCurrent();
+  AddOnTerminate(@FreeContext);
+
+  Options.SetZoom(50);
+  Options.SetBrightness(100);
+  Mainscreen.SetAngle(True);
+
+  Antiban.Init(SKILL_TOTAL, 4);
+  Antiban.SetupBiometrics();
+
+  Antiban.AddTask([@Antiban.LoseFocus,      RandomRange(ONE_MINUTE*5,  ONE_HOUR), 0.33]);
+  Antiban.AddTask([@Antiban.HoverPlayers,   RandomRange(ONE_MINUTE*5,  ONE_HOUR), 0.33]);
+  Antiban.AddTask([@Antiban.CheckStats,     RandomRange(ONE_MINUTE*5,  ONE_HOUR), 0.33]);
+  Antiban.AddTask([@Antiban.OpenRandomTab,  RandomRange(ONE_MINUTE*5,  ONE_HOUR), 0.33]);
+  Antiban.AddTask([@Antiban.VeryShortBreak, RandomRange(ONE_MINUTE*15, ONE_HOUR), 0.33]);
+  Antiban.AddTask([@Antiban.DoMiscStuff,    RandomRange(ONE_MINUTE*5,  ONE_HOUR), 0.33]);
+  Antiban.AddTask([@Antiban.RandomCompass,  RandomRange(ONE_MINUTE*5,  ONE_HOUR), 0.33]);
+  Antiban.AddTask([@Antiban.CheckSkill,     RandomRange(ONE_MINUTE*5,  ONE_HOUR), 0.33]);
+  Antiban.AddTask([@Antiban.FiveMinBreak,   RandomRange(ONE_MINUTE*30, ONE_HOUR), 0.33]);
+
+  Antiban.AddBreak([ONE_HOUR*2, ONE_MINUTE*20, 0.5, 0.25]);
+
+  writeln('InitContext-: Done.');
+end;
+
+// LoadMapContext() - Loads a new map into RSWalker.
+procedure LoadMapContext(mapPath: String; downsample: Integer = 6); begin
+  if Assigned(Walker) then
+    writeln('LoadMapContext-: Walker already initialized.  Reloading Walker...');
+    Walker.Free;
+
+  writeln('LoadMapContext-: Loading map: ' + mapPath);
+  Walker.Init(mapPath, downsample);
+  AddOnTerminate(@Walker.Free);
+end;
+
+procedure AntibanContext; begin
+  writeln('AntibanContext-: Doing Antiban.');
+  if not SRL.IsLoggedIn() then begin
+    writeln('AntibanContext-: Player not logged in, terminating script.');
+    Exit;
+  end;
+  SRL.DismissRandom();
+  Antiban.DoAntiban();
+  writeln(Antiban.TasksDone);
+  writeln('AntibanContext-: Antiban done!');
+end;

@@ -1,0 +1,56 @@
+// utilities
+
+function RandomizePoint(p: TPoint; range: Integer): TPoint;
+var
+  hx, hy, lx, ly, rx, ry: Integer; // high x, low x, random/result x
+
+begin
+  hx := p.x + range div 2;
+  hy := p.y + range div 2;
+  lx := p.x - range div 2;
+  ly := p.y - range div 2;
+  rx := RandomRange(lx, hx);
+  ry := RandomRange(ly, hy);
+  Result := Point(rx, ry);
+end;
+
+// checks if there is an HP bar present in the targets area
+function IsCombat(target: TPointArray; FilterPlayer: Boolean = False): Boolean; begin
+  if (FilterPlayer) then begin
+    Mainscreen.FilterPlayerBox(target); // filter player when you arent checking if player is in combat
+    Result := 0 < Length(Mainscreen.FindHPBars(GetTPABounds(target)));
+  end else
+    Result := 0 < Length(Mainscreen.FindHPBars(GetTPABounds(target)));
+end;
+
+function WaitPlayerAnimating(): boolean; begin
+  repeat
+    wait(50);
+  until not SRL.IsAnimating(Mainscreen.GetPlayerBox, 150, 500);
+end
+
+function WaitScreenMoving(): boolean; begin // a 640x440 screen has ~281000 pixels
+  repeat
+    wait(50);
+  until not SRL.IsAnimating(Mainscreen.GetBounds, 20000, 500, 5);
+end
+
+// checks if 2 points are in range of each other
+function inRange2(this, other: TPoint; range: integer): boolean;
+begin
+  Result := this.DistanceTo(other) <= range;
+end;
+
+procedure declarePlayer(name: string; pw: string; world: integer;
+                        isActive: boolean = True; isMember: boolean = False);
+begin
+  writeln('declarePlayer()-: declaring user: ' + name + ' ' + pw);
+  with Players.New()^ do
+  begin
+    LoginName := name;
+    Password  := pw;
+    IsActive  := isActive;
+    IsMember  := isMember;
+    World     := world;
+  end;
+end;
