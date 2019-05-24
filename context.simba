@@ -1,12 +1,11 @@
+// vim: set syntax=pascal:
 // context.simba
 // This is the global context of the script.  These variables will be made available to other files via the {$include_once} directive.
 // context.simba contains or may eventually contain an instance of SRL, RSWalker, the OSRS client (as a TClientWrapper (TODO)), and a logger.
 // Basically, this is the global context of the script, so things that need to be globally available will end up here.
 
 
-
 {$I SRL/OSR.simba}
-
 {$I RSWalker/Walker.simba}
 {$include_once credentials.simba}
 {$include_once utils.simba}
@@ -31,6 +30,11 @@ var
   PPasture, PStairs, PStairsUpper, PBank, PGate: TPoint;
   BankPath, PasturePath, StairPath, UpperStairPath: TPointArray;
 
+procedure myOnWalkEvent(Self: PRSWalker; myPos: TPoint); begin
+  SRL.DismissRandom();
+  Antiban.DoAntiban();
+end;
+
 // FreeContext - Frees Context.
 procedure FreeContext; begin
   writeln('FreeContext-: Freeing Context.');
@@ -42,30 +46,35 @@ end;
 procedure InitContext; begin
   writeln('InitContext-: Initializing Context.');
   SRL.Setup([]);
+
   declarePlayer(NAME, PW, WORLD);
   Players.SetCurrent(0);
   if not SRL.isLoggedIn then
     Players.LoginCurrent();
-  AddOnTerminate(@FreeContext);
 
   Options.SetZoom(50);
   Options.SetBrightness(100);
   Mainscreen.SetAngle(True);
 
-  Antiban.Init(SKILL_TOTAL, 4);
+  Antiban.Init(SKILL_TOTAL);
   Antiban.SetupBiometrics();
 
-  Antiban.AddTask([@Antiban.LoseFocus,      RandomRange(ONE_MINUTE*5,  ONE_HOUR), 0.33]);
-  Antiban.AddTask([@Antiban.HoverPlayers,   RandomRange(ONE_MINUTE*5,  ONE_HOUR), 0.33]);
-  Antiban.AddTask([@Antiban.CheckStats,     RandomRange(ONE_MINUTE*5,  ONE_HOUR), 0.33]);
-  Antiban.AddTask([@Antiban.OpenRandomTab,  RandomRange(ONE_MINUTE*5,  ONE_HOUR), 0.33]);
-  Antiban.AddTask([@Antiban.VeryShortBreak, RandomRange(ONE_MINUTE*15, ONE_HOUR), 0.33]);
-  Antiban.AddTask([@Antiban.DoMiscStuff,    RandomRange(ONE_MINUTE*5,  ONE_HOUR), 0.33]);
-  Antiban.AddTask([@Antiban.RandomCompass,  RandomRange(ONE_MINUTE*5,  ONE_HOUR), 0.33]);
-  Antiban.AddTask([@Antiban.CheckSkill,     RandomRange(ONE_MINUTE*5,  ONE_HOUR), 0.33]);
-  Antiban.AddTask([@Antiban.FiveMinBreak,   RandomRange(ONE_MINUTE*30, ONE_HOUR), 0.33]);
+  Antiban.AddTask([@Antiban.LoseFocus,      RandomRange(ONE_MINUTE*5,  ONE_HOUR*2), 0.33]);
+  Antiban.AddTask([@Antiban.HoverPlayers,   RandomRange(ONE_MINUTE*5,  ONE_HOUR*2), 0.33]);
+  Antiban.AddTask([@Antiban.CheckStats,     RandomRange(ONE_MINUTE*5,  ONE_HOUR*2), 0.33]);
+  Antiban.AddTask([@Antiban.OpenRandomTab,  RandomRange(ONE_MINUTE*5,  ONE_HOUR*2), 0.33]);
+  Antiban.AddTask([@Antiban.VeryShortBreak, RandomRange(ONE_MINUTE*15, ONE_HOUR*2), 0.33]);
+  Antiban.AddTask([@Antiban.DoMiscStuff,    RandomRange(ONE_MINUTE*5,  ONE_HOUR*1), 0.33]);
+  Antiban.AddTask([@Antiban.RandomCompass,  RandomRange(ONE_MINUTE*5,  ONE_HOUR*2), 0.33]);
+  Antiban.AddTask([@Antiban.CheckSkill,     RandomRange(ONE_MINUTE*5,  ONE_HOUR*2), 0.33]);
+  Antiban.AddTask([@Antiban.FiveMinBreak,   RandomRange(ONE_MINUTE*30, ONE_HOUR*2), 0.33]);
+  Antiban.AddTask([@Antiban.HoverPlayers,   RandomRange(ONE_MINUTE*45, ONE_HOUR*2), 0.33]);
+  Antiban.AddBreak([ONE_HOUR*2, ONE_MINUTE*20, 0.5, 0.25]);         // wow this is ugly
+  Antiban.AddBreak([RandomRange(ONE_MINUTE*5, ONE_HOUR*2), Random(ONE_MINUTE*10), 0.01, 0.25]);
+  Antiban.AddBreak([RandomRange(ONE_MINUTE*15, ONE_HOUR), Random(ONE_MINUTE*20), 0.01, 0.25]);
+  Antiban.AddBreak([RandomRange(ONE_HOUR+(ONE_HOUR div 4), ONE_HOUR*2), Random(ONE_MINUTE*20), 0.01, 0.25]);
 
-  Antiban.AddBreak([ONE_HOUR*2, ONE_MINUTE*20, 0.5, 0.25]);
+  AddOnTerminate(@FreeContext);
 
   writeln('InitContext-: Done.');
 end;
@@ -78,6 +87,7 @@ procedure LoadMapContext(mapPath: String; downsample: Integer = 6); begin
 
   writeln('LoadMapContext-: Loading map: ' + mapPath);
   Walker.Init(mapPath, downsample);
+  Walker.onWalkEvent := @myOnWalkEvent;
   AddOnTerminate(@Walker.Free);
 end;
 

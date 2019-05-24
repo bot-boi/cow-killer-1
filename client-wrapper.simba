@@ -1,9 +1,0 @@
-type
-  TClientWrapper = record
-                 SmartEnabled: Boolean;
-                 {$IFDEF SMART}
-                   Client: TSmart;
-                 {$ELSE}
-                   Client: TProcess;
-                 {$ENDIF}
-  end;

@@ -15,6 +15,9 @@ program cow;
 {$include_once finders.simba}
 {$include_once credentials.simba}
 
+var
+  Canvas: TCanvas;
+
 procedure onStart;
 
 var
@@ -85,7 +88,7 @@ begin
     {$ENDIF}
     for Gate in ATPA do
     begin
-      Mouse.Move(Gate[Random(Length(Gate))]);
+      Mouse.Move(GetTPABounds(Gate));
       if Mainscreen.IsUpText('Gate') then begin
         if ChooseOption.Open(1) then begin
           ChooseOption.Select('Open');
@@ -124,7 +127,7 @@ function walkStairs(): boolean;
 
       for _Stair in ATPA do
       begin
-        Mouse.Move(_Stair[Random(Length(_Stair))]);
+        Mouse.Move(GetTPABounds(_Stair).Expand(20));
         if Mainscreen.IsUpText('Staircase', 1000) then begin
           writeln('staircase found!');
           Result := True;
@@ -205,8 +208,8 @@ begin
   if Random(1) = 1 then AntibanContext();
 
   repeat Minimap.RandomCompass(0, 360); until Bankscreen.Open(blLumbridge);
-  Bankscreen.DepositAll();
-  Bankscreen.Close();
+  repeat until Bankscreen.DepositAll();
+  repeat until Bankscreen.Close();
 
   while not inRange2(Walker.GetMyPos(), PStairsUpper, 20) do begin
     wait(333, 777);
@@ -265,7 +268,11 @@ begin
 end;
 
 begin
+  Canvas.Init();
+  Canvas.TextOut(0,0, 'hello');
   onStart;
+
   mainLoop();
+
   onExit;
 end.

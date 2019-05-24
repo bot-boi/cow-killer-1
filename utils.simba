@@ -1,3 +1,4 @@
+// vim: set syntax=pascal:
 // utilities
 
 function RandomizePoint(p: TPoint; range: Integer): TPoint;

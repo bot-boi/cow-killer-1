@@ -1,3 +1,4 @@
+// vim: set syntax=pascal:
 // functions that primarily find objects on the screen
 
 {$include_once context.simba}
@@ -33,7 +34,7 @@ begin
     {$ENDIF}
     for Leather in ATPA do
     begin
-      Mouse.Move(Leather[Random(Length(Leather))]);
+      Mouse.Move(GetTPABounds(Leather));
       if Mainscreen.IsUpText('Cowhide') then
       begin
         Result := True;
@@ -84,7 +85,7 @@ begin
 
   for Cow in ATPA do
   begin
-    Mouse.Move(Cow[Random(Length(Cow))]);
+    Mouse.Move(GetTPABounds(Cow));
     if Mainscreen.IsUpText('Cow') and not IsCombat(Cow) then
     begin
       if Mouse.Click(ctRed) then begin
